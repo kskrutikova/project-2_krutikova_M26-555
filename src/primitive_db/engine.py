@@ -5,8 +5,21 @@ import shlex
 import prompt
 
 from src.primitive_db.constants import METADATA_FILE
-from src.primitive_db.core import create_table, drop_table, list_tables
-from src.primitive_db.utils import load_metadata, save_metadata
+from src.primitive_db.core import (
+    create_table,
+    delete,
+    drop_table,
+    insert,
+    list_tables,
+    select,
+    update,
+)
+from src.primitive_db.utils import (
+    load_metadata,
+    load_table_data,
+    save_metadata,
+    save_table_data,
+)
 
 
 def print_help() -> None:
@@ -17,6 +30,11 @@ def print_help() -> None:
     print("<command> create_table <имя_таблицы> <столбец1:тип> .. - создать таблицу")
     print("<command> list_tables - показать список всех таблиц")
     print("<command> drop_table <имя_таблицы> - удалить таблицу")
+    print("<command> insert <имя_таблицы> <значения...> - добавить запись")
+    print("<command> select <имя_таблицы> [where <условие>] - выбрать записи")
+    print("<command> update <имя_таблицы> set <условие> where <условие> - обновить")
+    print("<command> delete <имя_таблицы> where <условие> - удалить записи")
+    print("<command> info <имя_таблицы> - описание таблицы")
     print()
     print("Общие команды:")
     print("<command> exit - выход из программы")
@@ -71,6 +89,98 @@ def run() -> None:
                 continue
 
             list_tables(metadata)
+            continue
+
+        if command == "insert":
+            if len(args) < 3:
+                print("Ошибка: укажите имя таблицы и значения.")
+                continue
+
+            table_name = args[1]
+            values = args[2:]
+
+            if table_name not in metadata:
+                print(f'Ошибка: Таблица "{table_name}" не существует.')
+                continue
+
+            table_data = load_table_data(table_name)
+            table_data = insert(metadata, table_name, table_data, values)
+            save_table_data(table_name, table_data)
+            continue
+
+        if command == "select":
+            if len(args) < 2:
+                print("Ошибка: укажите имя таблицы.")
+                continue
+
+            table_name = args[1]
+
+            if table_name not in metadata:
+                print(f'Ошибка: Таблица "{table_name}" не существует.')
+                continue
+
+            table_data = load_table_data(table_name)
+
+            if len(args) >= 4 and args[2] == "where":
+                where_clause = " ".join(args[3:])
+            else:
+                where_clause = None
+
+            result = select(table_data, where_clause)
+            for record in result:
+                print(record)
+            continue
+
+        if command == "update":
+            if len(args) < 6 or args[2] != "set" or args[4] != "where":
+                print("Ошибка: формат update <таблица> set <условие> where <условие>.")
+                continue
+
+            table_name = args[1]
+            set_clause = args[3]
+            where_clause = args[5]
+
+            if table_name not in metadata:
+                print(f'Ошибка: Таблица "{table_name}" не существует.')
+                continue
+
+            table_data = load_table_data(table_name)
+            table_data = update(table_data, set_clause, where_clause)
+            save_table_data(table_name, table_data)
+            continue
+
+        if command == "delete":
+            if len(args) < 4 or args[2] != "where":
+                print("Ошибка: формат delete <таблица> where <условие>.")
+                continue
+
+            table_name = args[1]
+            where_clause = " ".join(args[3:])
+
+            if table_name not in metadata:
+                print(f'Ошибка: Таблица "{table_name}" не существует.')
+                continue
+
+            table_data = load_table_data(table_name)
+            table_data = delete(table_data, where_clause)
+            save_table_data(table_name, table_data)
+            continue
+
+        if command == "info":
+            if len(args) != 2:
+                print("Ошибка: укажите имя таблицы.")
+                continue
+
+            table_name = args[1]
+
+            if table_name not in metadata:
+                print(f'Ошибка: Таблица "{table_name}" не существует.')
+                continue
+
+            columns = metadata[table_name]
+            print(f'Таблица "{table_name}":')
+            for col_name, col_type in columns:
+                print(f"  {col_name}:{col_type}")
             continue
 
         print(f"Функции {command} нет. Попробуйте снова.")
