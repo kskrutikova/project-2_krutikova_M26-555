@@ -11,10 +11,6 @@
 
     make project
 
-Ожидаемый вывод:
-
-    DB project is running!
-
 ## Команды
 
     make install          # установка зависимостей
