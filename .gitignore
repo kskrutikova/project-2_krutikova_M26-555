@@ -1,0 +1,30 @@
+# Виртуальное окружение
+.venv/
+venv/
+env/
+
+# Сборки пакета
+dist/
+build/
+*.egg-info/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Данные примитивной БД (создаются во время работы)
+data/
+db_meta.json
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# uv
+.uv/
