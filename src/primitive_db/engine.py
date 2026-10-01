@@ -16,6 +16,7 @@ from src.primitive_db.core import (
     update,
 )
 from src.primitive_db.utils import (
+    delete_table_data,
     load_metadata,
     load_table_data,
     save_metadata,
@@ -80,11 +81,13 @@ def run() -> None:
                 print("Ошибка: укажите имя таблицы.")
                 continue
 
-            updated_metadata = drop_table(metadata, args[1])
+            table_name = args[1]
+            updated_metadata = drop_table(metadata, table_name)
 
             if updated_metadata is not None:
                 metadata = updated_metadata
                 save_metadata(METADATA_FILE, metadata)
+                delete_table_data(table_name)
 
             continue
 
