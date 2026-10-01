@@ -90,6 +90,26 @@ def list_tables(metadata: dict) -> None:
         print(f"- {table_name}")
 
 
+def create_cacher():
+    """Создаёт кэшер результатов функций."""
+    cache = {}
+
+    def cache_result(key, value_func):
+        """Возвращает кэшированный или вычисленный результат."""
+        if key not in cache:
+            cache[key] = value_func()
+
+        return cache[key]
+
+    def clear_cache():
+        """Очищает сохранённые результаты."""
+        cache.clear()
+
+    cache_result.clear_cache = clear_cache
+
+    return cache_result
+
+
 @handle_db_errors
 @log_time
 def insert(

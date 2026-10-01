@@ -7,6 +7,7 @@ from prettytable import PrettyTable
 
 from src.primitive_db.constants import METADATA_FILE
 from src.primitive_db.core import (
+    create_cacher,
     create_table,
     delete,
     drop_table,
@@ -47,6 +48,7 @@ def print_help() -> None:
 def run() -> None:
     """Запускает основной цикл взаимодействия с пользователем."""
     metadata = load_metadata(METADATA_FILE)
+    cache_result = create_cacher()
 
     while True:
         user_input = prompt.string("Введите команду: ")
@@ -88,6 +90,7 @@ def run() -> None:
                 metadata = updated_metadata
                 save_metadata(METADATA_FILE, metadata)
                 delete_table_data(table_name)
+                cache_result.clear_cache()
 
             continue
 
@@ -124,8 +127,16 @@ def run() -> None:
                 parsed[key] = val
             else:
                 table_data = load_table_data(table_name)
-                table_data = insert(metadata, table_name, table_data, parsed)
-                save_table_data(table_name, table_data)
+                updated_table_data = insert(
+                    metadata,
+                    table_name,
+                    table_data,
+                    parsed,
+                )
+
+                if updated_table_data is not None:
+                    save_table_data(table_name, updated_table_data)
+                    cache_result.clear_cache()
 
             continue
 
@@ -147,7 +158,12 @@ def run() -> None:
             else:
                 where_clause = None
 
-            result = select(table_data, where_clause)
+            cache_key = (table_name, where_clause)
+
+            result = cache_result(
+                cache_key,
+                lambda: select(table_data, where_clause),
+            )
 
             table = PrettyTable()
             if result:
@@ -165,15 +181,23 @@ def run() -> None:
 
             table_name = args[1]
             set_clause = args[3]
-            where_clause = args[5]
+            where_clause = " ".join(args[5:])
 
             if table_name not in metadata:
                 print(f'Ошибка: Таблица "{table_name}" не существует.')
                 continue
 
             table_data = load_table_data(table_name)
-            table_data = update(table_data, set_clause, where_clause)
-            save_table_data(table_name, table_data)
+            updated_table_data = update(
+                table_data,
+                set_clause,
+                where_clause,
+            )
+
+            if updated_table_data is not None:
+                save_table_data(table_name, updated_table_data)
+                cache_result.clear_cache()
+
             continue
 
         if command == "delete":
@@ -193,6 +217,7 @@ def run() -> None:
 
             if updated_table_data is not None:
                 save_table_data(table_name, updated_table_data)
+                cache_result.clear_cache()
 
             continue
 
