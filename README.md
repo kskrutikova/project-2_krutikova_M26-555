@@ -231,6 +231,7 @@ exit
 ```text
 src/
 └── primitive_db/
+    ├── __init__.py
     ├── main.py
     ├── engine.py
     ├── core.py
@@ -331,4 +332,4 @@ make publish
 - просмотр информации о таблице;
 - удаление таблицы с подтверждением.
 
-добавить ссылку записи.
+[Открыть демонстрацию в asciinema](https://asciinema.org/a/D4p1sTuNRCorl3aB)
