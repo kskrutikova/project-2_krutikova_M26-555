@@ -1,36 +1,44 @@
 [project]
-name = "project-2-krutikova-m26-555"
+name = "primitive_db"
 version = "0.1.0"
-description = "Primitive DB — учебный проект"
+description = "Primitive DB — учебный проект, консольное приложение, имитирующее работу с базой данных"
 readme = "README.md"
 authors = [
     { name = "Kseniia Krutikova", email = "ks-krutikova@yandex.ru" }
 ]
 requires-python = ">=3.12"
 dependencies = [
+    "prettytable>=3.18.0",
     "prompt>=0.4.1",
 ]
 
+
 [project.scripts]
+database = "src.primitive_db.main:main"
 project = "src.primitive_db.main:main"
+
 
 [build-system]
 requires = ["uv_build>=0.12.15,<0.13.0"]
 build-backend = "uv_build"
 
+
 [tool.uv.build-backend]
 module-name = "src.primitive_db"
 module-root = ""
+
 
 [dependency-groups]
 dev = [
     "ruff>=0.16.9",
 ]
 
+
 [tool.ruff]
 line-length = 88
 target-version = "py312"
 exclude = ["venv", ".venv", "dist", "__pycache__"]
+
 
 [tool.ruff.lint]
 select = ["E", "F", "I"]

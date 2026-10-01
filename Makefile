@@ -7,6 +7,9 @@ install:
 project:
 	uv run project
 
+database:
+	uv run database
+
 build:
 	uv build
 

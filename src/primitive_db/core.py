@@ -1,6 +1,9 @@
 from src.primitive_db.constants import VALID_TYPES
+from src.primitive_db.decorators import confirm_action, handle_db_errors, log_time
+from src.primitive_db.parser import parse_condition
 
 
+@handle_db_errors
 def create_table(metadata: dict, table_name: str, columns: list[str]) -> dict:
     """Создаёт таблицу в метаданных.
 
@@ -33,6 +36,30 @@ def create_table(metadata: dict, table_name: str, columns: list[str]) -> dict:
     return metadata
 
 
+def _convert_value(value: str, column_type: str) -> int | str | bool:
+    """Преобразует значение к типу столбца."""
+    if column_type == "int":
+        try:
+            return int(value)
+        except ValueError as error:
+            raise ValueError(f'Значение "{value}" должно быть целым числом.') from error
+
+    if column_type == "bool":
+        if value.lower() == "true":
+            return True
+        if value.lower() == "false":
+            return False
+        raise ValueError(f'Значение "{value}" должно быть true или false.')
+
+    if column_type == "str":
+        return value
+
+    raise ValueError(f"Неизвестный тип столбца: {column_type}.")
+
+
+@handle_db_errors
+@log_time
+@confirm_action("удаление таблицы")
 def drop_table(metadata: dict, table_name: str) -> dict:
     """Удаляет таблицу из метаданных.
 
@@ -49,6 +76,7 @@ def drop_table(metadata: dict, table_name: str) -> dict:
     return metadata
 
 
+@handle_db_errors
 def list_tables(metadata: dict) -> None:
     """Печатает список всех таблиц.
 
@@ -62,18 +90,20 @@ def list_tables(metadata: dict) -> None:
         print(f"- {table_name}")
 
 
+@handle_db_errors
+@log_time
 def insert(
     metadata: dict,
     table_name: str,
     table_data: list[dict],
-    values: list[str],
+    values: dict[str, str],
 ) -> list[dict]:
     """Добавляет новую запись в таблицу.
 
     :param metadata: метаданные
     :param table_name: имя таблицы
-    :param table_data: текущие данные таблицы (список записей)
-    :param values: значения столбцов в порядке их описания (без ID)
+    :param table_data: текущие данные таблицы
+    :param values: словарь {column_name: value}
     :return: обновлённый список записей
     """
     if table_name not in metadata:
@@ -81,29 +111,46 @@ def insert(
         return table_data
 
     columns = metadata[table_name]
-    # columns[0] — это ID, дальше пользовательские столбцы
     data_columns = columns[1:]
+    column_names = {column_name for column_name, _ in data_columns}
 
-    if len(values) != len(data_columns):
-        print(
-            f"Ошибка: ожидается {len(data_columns)} значений, получено {len(values)}."
-        )
+    if "ID" in values:
+        print('Ошибка: столбец "ID" заполняется автоматически.')
         return table_data
 
-    # Вычисляем новый ID
+    extra_columns = set(values) - column_names
+    if extra_columns:
+        extra_column = next(iter(extra_columns))
+        print(f'Ошибка: столбец "{extra_column}" отсутствует в таблице.')
+        return table_data
+
+    for col_name, _ in data_columns:
+        if col_name not in values:
+            print(f"Ошибка: не указано значение для столбца {col_name}.")
+            return table_data
+
+    converted_values = {}
+
+    for col_name, col_type in data_columns:
+        converted_values[col_name] = _convert_value(
+            values[col_name],
+            col_type,
+        )
+
     max_id = 0
     for record in table_data:
         if record.get("ID", 0) > max_id:
             max_id = record["ID"]
-    new_id = max_id + 1
 
+    new_id = max_id + 1
     new_record = {"ID": new_id}
-    for (col_name, _), value in zip(data_columns, values):
-        new_record[col_name] = value
+    new_record.update(converted_values)
 
     return table_data + [new_record]
 
 
+@handle_db_errors
+@log_time
 def select(
     table_data: list[dict],
     where_clause: str | None = None,
@@ -117,20 +164,14 @@ def select(
     if where_clause is None:
         return table_data
 
-    if "=" not in where_clause:
-        print(f"Ошибка: некорректное условие where: {where_clause}")
-        return table_data
+    condition = parse_condition(where_clause)
+    column, value = next(iter(condition.items()))
 
-    column, value = where_clause.split("=", 1)
-
-    result = []
-    for record in table_data:
-        if str(record.get(column)) == value:
-            result.append(record)
-
-    return result
+    return [record for record in table_data if record.get(column) == value]
 
 
+@handle_db_errors
+@log_time
 def update(
     table_data: list[dict],
     set_clause: str,
@@ -143,16 +184,26 @@ def update(
     :param where_clause: условие отбора вида "column=value"
     :return: новый список записей с обновлёнными значениями
     """
-    if "=" not in set_clause or "=" not in where_clause:
-        print("Ошибка: некорректное условие update.")
-        return table_data
+    set_condition = parse_condition(set_clause)
+    where_condition = parse_condition(where_clause)
 
-    set_col, set_value = set_clause.split("=", 1)
-    where_col, where_value = where_clause.split("=", 1)
+    set_col, set_value = next(iter(set_condition.items()))
+    where_col, where_value = next(iter(where_condition.items()))
+
+    if set_col == "ID":
+        raise ValueError('Столбец "ID" нельзя изменять.')
+
+    if table_data:
+        available_columns = set(table_data[0])
+        if set_col not in available_columns:
+            raise ValueError(f'Столбец "{set_col}" отсутствует в таблице.')
+        if where_col not in available_columns:
+            raise ValueError(f'Столбец "{where_col}" отсутствует в таблице.')
 
     new_data = []
+
     for record in table_data:
-        if str(record.get(where_col)) == where_value:
+        if record.get(where_col) == where_value:
             new_record = record.copy()
             new_record[set_col] = set_value
             new_data.append(new_record)
@@ -162,6 +213,9 @@ def update(
     return new_data
 
 
+@handle_db_errors
+@log_time
+@confirm_action("удаление записи")
 def delete(
     table_data: list[dict],
     where_clause: str,
@@ -172,12 +226,10 @@ def delete(
     :param where_clause: условие отбора вида "column=value"
     :return: новый список записей без удалённых
     """
-    if "=" not in where_clause:
-        print("Ошибка: некорректное условие delete.")
-        return table_data
+    condition = parse_condition(where_clause)
+    where_col, where_value = next(iter(condition.items()))
 
-    where_col, where_value = where_clause.split("=", 1)
+    if table_data and where_col not in table_data[0]:
+        raise ValueError(f'Столбец "{where_col}" отсутствует в таблице.')
 
-    return [
-        record for record in table_data if str(record.get(where_col)) != where_value
-    ]
+    return [record for record in table_data if record.get(where_col) != where_value]

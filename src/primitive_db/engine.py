@@ -3,6 +3,7 @@
 import shlex
 
 import prompt
+from prettytable import PrettyTable
 
 from src.primitive_db.constants import METADATA_FILE
 from src.primitive_db.core import (
@@ -79,8 +80,12 @@ def run() -> None:
                 print("Ошибка: укажите имя таблицы.")
                 continue
 
-            metadata = drop_table(metadata, args[1])
-            save_metadata(METADATA_FILE, metadata)
+            updated_metadata = drop_table(metadata, args[1])
+
+            if updated_metadata is not None:
+                metadata = updated_metadata
+                save_metadata(METADATA_FILE, metadata)
+
             continue
 
         if command == "list_tables":
@@ -103,9 +108,22 @@ def run() -> None:
                 print(f'Ошибка: Таблица "{table_name}" не существует.')
                 continue
 
-            table_data = load_table_data(table_name)
-            table_data = insert(metadata, table_name, table_data, values)
-            save_table_data(table_name, table_data)
+            if not values:
+                print("Ошибка: укажите хотя бы одно поле в формате key=value.")
+                continue
+
+            parsed = {}
+            for v in values:
+                if "=" not in v:
+                    print(f"Ошибка: аргумент '{v}' должен быть в формате key=value.")
+                    break
+                key, val = v.split("=", 1)
+                parsed[key] = val
+            else:
+                table_data = load_table_data(table_name)
+                table_data = insert(metadata, table_name, table_data, parsed)
+                save_table_data(table_name, table_data)
+
             continue
 
         if command == "select":
@@ -127,8 +145,14 @@ def run() -> None:
                 where_clause = None
 
             result = select(table_data, where_clause)
-            for record in result:
-                print(record)
+
+            table = PrettyTable()
+            if result:
+                table.field_names = result[0].keys()
+                for record in result:
+                    table.add_row(record.values())
+
+            print(table)
             continue
 
         if command == "update":
@@ -162,8 +186,11 @@ def run() -> None:
                 continue
 
             table_data = load_table_data(table_name)
-            table_data = delete(table_data, where_clause)
-            save_table_data(table_name, table_data)
+            updated_table_data = delete(table_data, where_clause)
+
+            if updated_table_data is not None:
+                save_table_data(table_name, updated_table_data)
+
             continue
 
         if command == "info":
